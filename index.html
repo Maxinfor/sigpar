@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Sistema do Conselho Tutelar</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body class="bg-slate-100 p-6">
+
+<div class="max-w-7xl mx-auto bg-white p-8 rounded-xl shadow-lg">
+    <h1 class="text-3xl font-bold mb-6 text-slate-800 border-b pb-4">Gestão do Conselho Tutelar</h1>
+    
+    <!-- Formulário -->
+    <form id="formAtendimento" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        <input type="text" id="numProcesso" placeholder="N° de Processo" class="p-2 border rounded" required>
+        <input type="text" id="pastaInput" readonly class="p-2 border rounded bg-slate-200 font-bold" placeholder="Pasta Automática">
+        
+        <div id="criancasContainer" class="md:col-span-2 p-4 border rounded bg-slate-50">
+            <label class="block font-bold mb-2">Crianças / Irmãos:</label>
+            <div class="flex gap-2 mb-2 crianca-row">
+                <input type="text" placeholder="Nome" class="p-2 border rounded flex-1 crianca-nome" required>
+                <input type="date" class="p-2 border rounded crianca-nasc" required>
+            </div>
+            <button type="button" onclick="adicionarCrianca()" class="text-sm bg-blue-500 text-white px-3 py-1 rounded">+ Add Irmão</button>
+        </div>
+
+        <div id="responsaveisContainer" class="md:col-span-2 p-4 border rounded bg-slate-50">
+            <label class="block font-bold mb-2">Responsáveis:</label>
+            <div class="flex gap-2 mb-2 resp-row">
+                <input type="text" placeholder="Nome" class="p-2 border rounded flex-1 resp-nome" required>
+                <input type="text" placeholder="Parentesco (ex: Mãe)" class="p-2 border rounded w-40 resp-parentesco" required>
+            </div>
+            <button type="button" onclick="adicionarResponsavel()" class="text-sm bg-blue-500 text-white px-3 py-1 rounded">+ Add Responsável</button>
+        </div>
+
+        <input type="text" id="endereco" placeholder="Endereço" class="p-2 border rounded" required>
+        <input type="text" id="cidade" placeholder="Cidade" class="p-2 border rounded" required>
+        <select id="assuntoSelect" onchange="verificarOutro()" class="p-2 border rounded" required>
+            <option value="">Selecione o Assunto</option>
+            <option>Negligência</option><option>Abandono de incapaz</option><option>Maus tratos</option>
+            <option>Falta escolar</option><option>Vaga em creche</option><option>Vaga escolar</option><option>Outro</option>
+        </select>
+        <input type="text" id="assuntoOutro" placeholder="Especifique o Assunto" class="p-2 border rounded hidden">
+        <input type="text" id="conselheiro" placeholder="Conselheiro(a) do dia" class="p-2 border rounded" required>
+        <button type="submit" class="md:col-span-2 bg-green-600 text-white p-3 rounded font-bold hover:bg-green-700">SALVAR REGISTRO</button>
+    </form>
+
+    <!-- Busca e Tabela -->
+    <input type="text" id="searchInput" oninput="renderizar()" placeholder="Pesquisa inteligente..." class="w-full p-2 border rounded mb-4">
+    <table class="w-full border-collapse">
+        <thead class="bg-slate-800 text-white">
+            <tr><th class="p-2">Pasta</th><th class="p-2">Criança</th><th class="p-2">Ações</th></tr>
+        </thead>
+        <tbody id="tabelaCorpo"></tbody>
+    </table>
+</div>
+
+<script>
+    let registros = JSON.parse(localStorage.getItem('ct_db')) || [];
+
+    function adicionarCrianca() {
+        const div = document.createElement('div');
+        div.className = "flex gap-2 mb-2 crianca-row";
+        div.innerHTML = `<input type="text" placeholder="Nome" class="p-2 border rounded flex-1 crianca-nome"><input type="date" class="p-2 border rounded crianca-nasc">`;
+        document.getElementById('criancasContainer').appendChild(div);
+    }
+
+    function adicionarResponsavel() {
+        const div = document.createElement('div');
+        div.className = "flex gap-2 mb-2 resp-row";
+        div.innerHTML = `<input type="text" placeholder="Nome" class="p-2 border rounded flex-1 resp-nome"><input type="text" placeholder="Parentesco" class="p-2 border rounded w-40 resp-parentesco">`;
+        document.getElementById('responsaveisContainer').appendChild(div);
+    }
+
+    function verificarOutro() {
+        document.getElementById('assuntoOutro').classList.toggle('hidden', document.getElementById('assuntoSelect').value !== 'Outro');
+    }
+
+    document.getElementById('formAtendimento').onsubmit = (e) => {
+        e.preventDefault();
+        const pasta = `A-${registros.length + 1}`;
+        const novo = {
+            id: Date.now(), pasta,
+            processo: document.getElementById('numProcesso').value,
+            crianca: Array.from(document.querySelectorAll('.crianca-row')).map(r => `${r.querySelector('.crianca-nome').value} (${r.querySelector('.crianca-nasc').value})`).join(' | '),
+            responsavel: Array.from(document.querySelectorAll('.resp-row')).map(r => `${r.querySelector('.resp-nome').value} (${r.querySelector('.resp-parentesco').value})`).join(', '),
+            endereco: document.getElementById('endereco').value,
+            cidade: document.getElementById('cidade').value,
+            assunto: document.getElementById('assuntoSelect').value === 'Outro' ? document.getElementById('assuntoOutro').value : document.getElementById('assuntoSelect').value,
+            conselheiro: document.getElementById('conselheiro').value
+        };
+        registros.push(novo);
+        localStorage.setItem('ct_db', JSON.stringify(registros));
+        renderizar();
+        e.target.reset();
+        document.getElementById('pastaInput').value = `A-${registros.length + 1}`;
+    };
+
+    function calcularIdade(dataNasc) {
+        const nasc = new Date(dataNasc);
+        const diff = Date.now() - nasc.getTime();
+        return Math.abs(new Date(diff).getUTCFullYear() - 1970);
+    }
+
+    function renderizar() {
+        const busca = document.getElementById('searchInput').value.toLowerCase();
+        const tbody = document.getElementById('tabelaCorpo');
+        tbody.innerHTML = '';
+        registros.filter(r => JSON.stringify(r).toLowerCase().includes(busca)).forEach((r, i) => {
+            const ehMaior = r.crianca.includes('(') && calcularIdade(r.crianca.split('(')[1].split(')')[0]) >= 18;
+            const tr = document.createElement('tr');
+            tr.className = ehMaior ? "bg-green-200 border-b" : "border-b";
+            tr.innerHTML = `<td class="p-2 font-bold">${r.pasta}</td><td class="p-2">${r.crianca}</td>
+            <td class="p-2"><button onclick="gerarCapa(${i})" class="bg-blue-600 text-white px-2 rounded">Capa PDF</button></td>`;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function gerarCapa(i) {
+        const r = registros[i];
+        const doc = new jspdf.jsPDF();
+        doc.text(`Pasta: ${r.pasta}      Processo: ${r.processo}`, 20, 20);
+        doc.text(`Criança: ${r.crianca}`, 20, 40);
+        doc.text(`Responsável: ${r.responsavel}`, 20, 50);
+        doc.text(`Endereço: ${r.endereco}`, 20, 60);
+        doc.text(`Assunto: ${r.assunto}`, 105, 100, {align: 'center'});
+        doc.save(`Capa_${r.pasta}.pdf`);
+    }
+
+    document.getElementById('pastaInput').value = `A-${registros.length + 1}`;
+    renderizar();
+</script>
+</body>
+</html>
